@@ -1,6 +1,7 @@
 import os
 import time
 import streamlit as st
+from tools import generate_image
 from openai import OpenAI
 from dotenv import load_dotenv
 from memory import (
@@ -188,7 +189,8 @@ if not st.session_state.messages:
 
     if starter_clicked:
         st.chat_message("user", avatar="🧑‍💻").write(starter_clicked)
-        reply = chat(starter_clicked)
+        with st.spinner("💭 GCO is thinking..."):
+            reply = chat(starter_clicked)
         st.chat_message("assistant", avatar="🤖").write(reply)
 
         facts_before = set(get_user_memory(user_id).keys())
@@ -209,10 +211,34 @@ for msg in st.session_state.messages:
     st.chat_message(msg["role"], avatar=avatar).write(msg["content"])
 
 # --- Chat input ---
-if prompt := st.chat_input("Say something..."):
+if prompt := st.chat_input("Say something... (try /image a sunset over mountains)"):
     st.chat_message("user", avatar="🧑‍💻").write(prompt)
-    reply = chat(prompt)
-    st.chat_message("assistant", avatar="🤖").write(reply)
+
+    if prompt.lower().startswith("/image "):
+        image_prompt = prompt[7:]
+        with st.spinner("🎨 GCO is creating your image..."):
+            image_data = generate_image(image_prompt)
+        if image_data:
+            st.chat_message("assistant", avatar="🤖").image(image_data, caption=image_prompt)
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            st.session_state.messages.append({"role": "assistant", "content": f"[Generated image: {image_prompt}]"})
+        else:
+            st.chat_message("assistant", avatar="🤖").write("Sorry, I couldn't generate that image — try rephrasing it.")
+    else:
+        with st.spinner("💭 GCO is thinking..."):
+            reply = chat(prompt)
+        st.chat_message("assistant", avatar="🤖").write(reply)
+
+        facts_before = set(get_user_memory(user_id).keys())
+        new_facts = extract_memory(prompt)
+        for k, v in new_facts.items():
+            save_fact(user_id, k, str(v))
+        facts_after = set(get_user_memory(user_id).keys())
+        newly_saved = facts_after - facts_before
+        if newly_saved:
+            st.toast(f"🧠 Remembered: {', '.join(newly_saved)}", icon="🧠")
+
+    after_message_save()
 
     facts_before = set(get_user_memory(user_id).keys())
     new_facts = extract_memory(prompt)
