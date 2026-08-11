@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from memory import save_fact, build_system_prompt, extract_memory, save_session, get_all_sessions, load_session
 
 load_dotenv()
+st.write(f"DEBUG - Redis URL length: {len(os.getenv('REDIS_URL', 'MISSING'))}")
 
 client = OpenAI(
     api_key=os.getenv("GROQ_API_KEY"),
