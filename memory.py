@@ -59,3 +59,11 @@ def get_all_sessions(user_id):
 def load_session(user_id, session_id):
     data = r.get(f"session:{user_id}:{session_id}")
     return json.loads(data) if data else []
+
+
+def clear_user_data(user_id):
+    r.delete(f"user:{user_id}")
+    session_ids = r.zrevrange(f"sessions:{user_id}", 0, -1)
+    for sid in session_ids:
+        r.delete(f"session:{user_id}:{sid}")
+    r.delete(f"sessions:{user_id}")

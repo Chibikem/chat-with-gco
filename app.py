@@ -3,18 +3,21 @@ import time
 import streamlit as st
 from openai import OpenAI
 from dotenv import load_dotenv
-from memory import save_fact, build_system_prompt, extract_memory, save_session, get_all_sessions, load_session
+from memory import (
+    save_fact, build_system_prompt, extract_memory,
+    save_session, get_all_sessions, load_session,
+    get_user_memory, clear_user_data
+)
 
 load_dotenv()
-
 
 client = OpenAI(
     api_key=os.getenv("GROQ_API_KEY"),
     base_url="https://api.groq.com/openai/v1"
 )
 
-st.title("💬 GCO's Chatbot")
-st.caption("Your AI companion that remembers what matters to you.")
+st.title("💬 Chat with GCO")
+st.caption("Your AI companion that remembers what matters to you — powered by Groq, so it thinks fast.")
 
 user_id = "demo_user"
 
@@ -23,6 +26,7 @@ if "session_id" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# --- Sidebar ---
 with st.sidebar:
     st.header("💬 Past Chats")
 
@@ -41,6 +45,30 @@ with st.sidebar:
             st.session_state.messages = load_session(user_id, sid)
             st.rerun()
 
+    st.divider()
+    st.subheader("🔒 Your Privacy")
+    st.caption("GCO remembers facts you share to make future chats better.")
+
+    if st.button("🗑️ Clear my data"):
+        st.session_state.confirm_clear = True
+
+    if st.session_state.get("confirm_clear"):
+        st.warning("This deletes everything GCO remembers about you, permanently.")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Yes, clear it"):
+                clear_user_data(user_id)
+                st.session_state.messages = []
+                st.session_state.session_id = str(int(time.time()))
+                st.session_state.confirm_clear = False
+                st.success("All your data has been cleared.")
+                time.sleep(1)
+                st.rerun()
+        with col2:
+            if st.button("Cancel"):
+                st.session_state.confirm_clear = False
+                st.rerun()
+
 
 def chat(user_input):
     system_prompt = build_system_prompt(user_id)
@@ -58,17 +86,60 @@ def chat(user_input):
     return reply
 
 
+# --- Warm intro on empty chat ---
+if not st.session_state.messages:
+    st.chat_message("assistant", avatar="🤖").write(
+        "Hey, I'm GCO 👋 I remember what you tell me, so the more we talk, the more helpful I get. What's on your mind?"
+    )
+
+    st.write("Or try one of these:")
+    col1, col2, col3 = st.columns(3)
+    starter_clicked = None
+    with col1:
+        if st.button("Tell me about yourself"):
+            starter_clicked = "Tell me a bit about yourself."
+    with col2:
+        if st.button("What do you remember about me?"):
+            starter_clicked = "What do you remember about me so far?"
+    with col3:
+        if st.button("Help me think through something"):
+            starter_clicked = "I want to think through something with you."
+
+    if starter_clicked:
+        st.chat_message("user", avatar="🧑‍💻").write(starter_clicked)
+        reply = chat(starter_clicked)
+        st.chat_message("assistant", avatar="🤖").write(reply)
+
+        facts_before = set(get_user_memory(user_id).keys())
+        new_facts = extract_memory(starter_clicked)
+        for k, v in new_facts.items():
+            save_fact(user_id, k, str(v))
+        facts_after = set(get_user_memory(user_id).keys())
+        newly_saved = facts_after - facts_before
+        if newly_saved:
+            st.toast(f"🧠 Remembered: {', '.join(newly_saved)}", icon="🧠")
+
+        save_session(user_id, st.session_state.session_id, st.session_state.messages)
+        st.rerun()
+
+# --- Display existing conversation ---
 for msg in st.session_state.messages:
     avatar = "🧑‍💻" if msg["role"] == "user" else "🤖"
     st.chat_message(msg["role"], avatar=avatar).write(msg["content"])
 
+# --- Chat input ---
 if prompt := st.chat_input("Say something..."):
     st.chat_message("user", avatar="🧑‍💻").write(prompt)
     reply = chat(prompt)
     st.chat_message("assistant", avatar="🤖").write(reply)
 
+    facts_before = set(get_user_memory(user_id).keys())
     new_facts = extract_memory(prompt)
     for k, v in new_facts.items():
         save_fact(user_id, k, str(v))
+    facts_after = set(get_user_memory(user_id).keys())
+    newly_saved = facts_after - facts_before
+    if newly_saved:
+        st.toast(f"🧠 Remembered: {', '.join(newly_saved)}", icon="🧠")
 
     save_session(user_id, st.session_state.session_id, st.session_state.messages)
