@@ -6,7 +6,9 @@ from dotenv import load_dotenv
 from memory import (
     save_fact, build_system_prompt, extract_memory,
     save_session, get_all_sessions, load_session,
-    get_user_memory, clear_user_data
+    get_user_memory, clear_user_data,
+    generate_title, save_session_title, get_all_session_titles,
+    delete_session
 )
 
 load_dotenv()
@@ -16,8 +18,69 @@ client = OpenAI(
     base_url="https://api.groq.com/openai/v1"
 )
 
-st.title("💬 Chat with GCO")
-st.caption("Your AI companion that remembers what matters to you — powered by Groq, so it thinks fast.")
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Inter:wght@400;500;600&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Inter', sans-serif;
+}
+
+.gco-header {
+    padding: 0.5rem 0 1.2rem 0;
+}
+.gco-title {
+    font-family: 'Fraunces', serif;
+    font-weight: 700;
+    font-size: 2.4rem;
+    color: #1B2A4A;
+    margin-bottom: 0.2rem;
+}
+.gco-underline {
+    width: 64px;
+    height: 4px;
+    background: #C9A227;
+    border-radius: 2px;
+    margin-bottom: 0.7rem;
+}
+.gco-caption {
+    color: #6B7280;
+    font-size: 1rem;
+}
+
+[data-testid="stChatMessage"] {
+    border-radius: 14px;
+    padding: 0.4rem 0.6rem;
+    margin-bottom: 0.6rem;
+    box-shadow: 0 1px 3px rgba(27,42,74,0.08);
+}
+
+[data-testid="stSidebar"] {
+    background-color: #F7F3E9;
+    border-right: 1px solid #E8E0CC;
+}
+[data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+    font-family: 'Fraunces', serif;
+    color: #1B2A4A;
+}
+
+button[kind="secondary"], .stButton button {
+    border-radius: 10px !important;
+    border: 1px solid #C9A227 !important;
+    color: #1B2A4A !important;
+}
+.stButton button:hover {
+    background-color: #C9A227 !important;
+    color: #FFFFFF !important;
+}
+</style>
+
+<div class="gco-header">
+    <div class="gco-title">💬 Chat with GCO</div>
+    <div class="gco-underline"></div>
+    <div class="gco-caption">Your AI companion that remembers what matters to you — powered by Groq, so it thinks fast.</div>
+</div>
+""", unsafe_allow_html=True)
 
 user_id = "demo_user"
 
@@ -38,12 +101,23 @@ with st.sidebar:
     st.divider()
 
     past_sessions = get_all_sessions(user_id)
+    session_titles = get_all_session_titles(user_id)
+
     for sid in past_sessions:
-        label = time.strftime("%b %d, %I:%M %p", time.localtime(int(sid)))
-        if st.button(label, key=f"session_{sid}"):
-            st.session_state.session_id = sid
-            st.session_state.messages = load_session(user_id, sid)
-            st.rerun()
+        label = session_titles.get(sid, time.strftime("%b %d, %I:%M %p", time.localtime(int(sid))))
+        col1, col2 = st.columns([5, 1])
+        with col1:
+            if st.button(label, key=f"session_{sid}", use_container_width=True):
+                st.session_state.session_id = sid
+                st.session_state.messages = load_session(user_id, sid)
+                st.rerun()
+        with col2:
+            if st.button("🗑️", key=f"delete_{sid}"):
+                delete_session(user_id, sid)
+                if st.session_state.session_id == sid:
+                    st.session_state.session_id = str(int(time.time()))
+                    st.session_state.messages = []
+                st.rerun()
 
     st.divider()
     st.subheader("🔒 Your Privacy")
@@ -86,6 +160,13 @@ def chat(user_input):
     return reply
 
 
+def after_message_save():
+    save_session(user_id, st.session_state.session_id, st.session_state.messages)
+    if len(st.session_state.messages) == 2:
+        title = generate_title(st.session_state.messages[0]["content"])
+        save_session_title(user_id, st.session_state.session_id, title)
+
+
 # --- Warm intro on empty chat ---
 if not st.session_state.messages:
     st.chat_message("assistant", avatar="🤖").write(
@@ -119,7 +200,7 @@ if not st.session_state.messages:
         if newly_saved:
             st.toast(f"🧠 Remembered: {', '.join(newly_saved)}", icon="🧠")
 
-        save_session(user_id, st.session_state.session_id, st.session_state.messages)
+        after_message_save()
         st.rerun()
 
 # --- Display existing conversation ---
@@ -142,4 +223,4 @@ if prompt := st.chat_input("Say something..."):
     if newly_saved:
         st.toast(f"🧠 Remembered: {', '.join(newly_saved)}", icon="🧠")
 
-    save_session(user_id, st.session_state.session_id, st.session_state.messages)
+    after_message_save()

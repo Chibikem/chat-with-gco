@@ -67,3 +67,30 @@ def clear_user_data(user_id):
     for sid in session_ids:
         r.delete(f"session:{user_id}:{sid}")
     r.delete(f"sessions:{user_id}")
+
+
+def generate_title(conversation_snippet):
+    prompt = f"""Summarize the topic of this conversation in 3-5 words,
+Title Case, no punctuation at the end, no quotes.
+
+Conversation: {conversation_snippet}"""
+
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response.choices[0].message.content.strip().strip('"')
+
+
+def save_session_title(user_id, session_id, title):
+    r.hset(f"session_titles:{user_id}", session_id, title)
+
+
+def get_all_session_titles(user_id):
+    return r.hgetall(f"session_titles:{user_id}")
+
+
+def delete_session(user_id, session_id):
+    r.delete(f"session:{user_id}:{session_id}")
+    r.zrem(f"sessions:{user_id}", session_id)
+    r.hdel(f"session_titles:{user_id}", session_id)
