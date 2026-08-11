@@ -1,20 +1,11 @@
-import os
-import base64
-from dotenv import load_dotenv
-from google import genai
-from google.genai import types
-
-load_dotenv()
-
-gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+import requests
+import urllib.parse
 
 
 def generate_image(prompt):
-    response = gemini_client.models.generate_content(
-        model="gemini-2.5-flash-image",
-        contents=prompt,
-    )
-    for part in response.candidates[0].content.parts:
-        if part.inline_data is not None:
-            return part.inline_data.data
+    encoded_prompt = urllib.parse.quote(prompt)
+    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
+    response = requests.get(url, timeout=30)
+    if response.status_code == 200:
+        return response.content
     return None
