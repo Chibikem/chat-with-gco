@@ -12,13 +12,7 @@ client = OpenAI(
     base_url="https://api.groq.com/openai/v1"
 )
 
-r = redis.Redis(
-    host=os.getenv("REDIS_HOST"),
-    port=int(os.getenv("REDIS_PORT")),
-    password=os.getenv("REDIS_PASSWORD"),
-    ssl=True,
-    decode_responses=True
-)
+r = redis.from_url(os.getenv("REDIS_URL"), decode_responses=True)
 
 
 def save_fact(user_id, key, value):
