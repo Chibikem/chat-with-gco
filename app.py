@@ -7,7 +7,7 @@ from memory import save_fact, build_system_prompt, extract_memory, save_session,
 
 load_dotenv()
 url = os.getenv('REDIS_URL', 'MISSING')
-st.write(f"DEBUG - Length: {len(url)} | Last 15 chars: {url[-15:]}") 'MISSING'))}")
+st.write(f"DEBUG - Length: {len(url)} | Last 15 chars: {url[-15:]}")
 
 client = OpenAI(
     api_key=os.getenv("GROQ_API_KEY"),
